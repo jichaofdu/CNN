@@ -40,7 +40,7 @@ public class GapParameter implements Serializable{
 	public void readFromDiskGap(String path) throws FileNotFoundException, IOException, ClassNotFoundException{
 		String fileName = path + "Gap" + index + ".obj";
 		ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName));
-		IHFormulaParameter newRead = (IHFormulaParameter)in.readObject();
+		GapParameter newRead = (GapParameter)in.readObject();
 		this.bias = newRead.getBias();
 		this.length = newRead.getLength();
 		this.index = newRead.getIndex();

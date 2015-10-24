@@ -7,7 +7,8 @@ public class Launcher {
 		CNNClassification cnn = new CNNClassification();
 		try {
 			cnn.trainingProcedure();
-		} catch (IOException e) {
+			cnn.testingProcedure();
+		} catch (IOException | ClassNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}

@@ -65,4 +65,72 @@ public class MathFunction {
 		//temp  = temp * sk.getBeta() + sk.getBias();
 		return temp;
 	}
+	
+	public static double[][] spandBackpropagationWeight(double[][] smallMatrix,int wide){
+		int oldWidth = smallMatrix.length;
+		double[][] newMatrix = new double[oldWidth * 2][oldWidth * 2];
+		int chushu = 2 * 2;
+		for(int i = 0;i < oldWidth;i++){
+			for(int j = 0;j < oldWidth;j++){
+				double temp = smallMatrix[i][j] / chushu;
+				int i2 = i * 2;
+				int j2 = j * 2;
+				newMatrix[i2][j2] = temp;
+				newMatrix[i2][j2+1] = temp;
+				newMatrix[i2+1][j2] = temp;
+				newMatrix[i2+1][j2+1] = temp;
+			}
+		}
+		return newMatrix;
+	}
+	
+	public static void inverseConvolutional(Maps front,ConvolutionalKernel ck,Maps behind){
+		int width = behind.getWidth();
+		int kernelWidth = ck.getHeight();
+		for(int i = 0;i < width;i++){
+			for(int j = 0;j < width;j++){
+				for(int m = 0;m < kernelWidth;m++){
+					for(int n = 0;n < kernelWidth;n++){
+						front.setError(i + m, j + n,front.getError(i+m,j+n) + behind.getError(i, j) * ck.getWeight(m, n));
+					}
+				}	
+			}
+		}
+	}
+	
+	public static void adjustConvolution(Maps input,ConvolutionalKernel ck,Maps output){
+		int width  = output.getHeight();
+		for(int i = 0;i < width;i++){
+			for(int j = 0;j <width;j++){
+				double avgErr = output.getError(i, j) / 25;
+				for(int m = 0;m < 5;m++){
+					for(int n = 0;n < 5;n++){
+						ck.setWeight(m, n, ck.getWeight(m, n) + (-avgErr) * input.getNumber(i+m, j+m));
+					}
+				}
+				
+			}
+		}
+	}
+	
+	public static void adjustConvolutionMore(Maps[] input,ConvolutionalKernel ck,Maps output){
+		int width = output.getWidth();
+		for(int i = 0;i < width;i++){
+			for(int j = 0;j < width;j++){
+				double avgErr = output.getError(i, j) / 25;
+				for(int m = 0;m < 5;m++){
+					for(int n = 0;n < 5;n++){
+						double adjustTemp = 0;
+						for(int index = 0;index < input.length;index++){
+							adjustTemp += ck.getWeight(m, n) + (-avgErr) * input[index].getNumber(i+m, j+m);
+						}
+						adjustTemp /= 6;
+						ck.setWeight(m, n, adjustTemp);
+					}
+				}
+				
+			}
+		}
+	}
 }
+

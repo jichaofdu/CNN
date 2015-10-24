@@ -75,7 +75,7 @@ public class ConvolutionalKernel implements Serializable{
 		this.change[i][j] = newChange;
 	}
 	
-	public void setWeight(int i,int j,int newWeight){
+	public void setWeight(int i,int j,double newWeight){
 		this.weight[i][j] = newWeight;
 	}
 	

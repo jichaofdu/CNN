@@ -13,6 +13,7 @@ public class CNNClassification {
 	private Maps[] s2Layer;
 	private Maps[] c3Layer;
 	private Maps[] s4Layer;
+	private double[] gapLine;
 	private Maps[] c5Layer;
 	private Maps[] f6Layer;
 	private Maps[] outputLayer;
@@ -67,7 +68,7 @@ public class CNNClassification {
 				if((double)(i % 100) == 0 && i >= 100){
 					System.out.println("["+ i + "] Runing......");
 				}
-				if((double)(i % 10000) == 0 && i >= 10000){
+				if((double)(i % 5000) == 0 && i >= 5000){
 					saveParaToDisk();
 					LogRecord.logRecord("[" + i + "] Saved weight to the disk. ",logPath);
 				}
@@ -76,11 +77,25 @@ public class CNNClassification {
 		LogRecord.logRecord("[End] Learning Procedure End ",logPath);
 	}
 	
+	public void testingProcedure() throws FileNotFoundException, ClassNotFoundException, IOException{
+		readParaFromDisk();
+		int correct = 0;
+		for(int i = 60000;i < 60001 + testSetSize;i++){
+			NumberObject numberObj = new NumberObject(i,28,28,dataPath);
+			setNowCase(numberObj);
+			calculateOutput();
+			guessNumberAndSaveAnswer();
+			if(desiredNumber == guessNumber){
+				correct++;
+			}
+			
+		}
+		LogRecord.logRecord("[End] Correct rate：" + correct + " / " + testSetSize,logPath);
+	}
+	
 	private void initPara(){
 		Random randomgen = new Random();
-		
 		desiredOutput = new double[10];
-		
 		//Initialize weight and bias between intput and C1
 		double[][] ck1TempWeight = new double[ckSize][ckSize];
 		double ck1TempBias;
@@ -262,7 +277,7 @@ public class CNNClassification {
 			}
 		}
 		//计算gap层：将16 * 5 * 5个数字摊开，套用bp网络算法展开
-		double[] gapLine = MathFunction.mapToLine(s4Layer);
+		gapLine = MathFunction.mapToLine(s4Layer);
 		for(int i = 0;i < 120;i++){
 			double tempHidden = 0;
 			for(int j = 0;j < 16 * 5 * 5;j++){
@@ -308,8 +323,101 @@ public class CNNClassification {
 	}
 	
 	private void backPropagation(){
-		
-		
+		calculateDeltaError();
+		//调整output与f6之间的参数
+		for(int i = 0;i < 10;i++){
+			for(int j = 0;j < 84;j++){
+				bp2[i].setWeight(j, bp2[i].getWeight(j) + (- f6Layer[j].getNumber(0, 0) * outputLayer[i].getError(0, 0) * outputLayer[i].getNumber(0,0) * (1 - outputLayer[i].getNumber(0,0))));
+			}
+		}
+		//调节c5与f6之间的参数
+		for(int i = 0;i < 84;i++){
+			for(int j = 0;j < 120;j++){
+				bp1[i].setWeight(j, bp1[i].getWeight(j) + (- c5Layer[j].getNumber(0, 0) * f6Layer[i].getError(0, 0)));
+			}
+		}
+		//调节c5与s4参数
+		for(int i = 0;i < 120;i++){
+			for(int j = 0;j < 16 * 5 * 5;j++){
+				gap5[i].setWeight(j, gap5[i].getWeight(j) + (- gapLine[j] * c5Layer[i].getNumber(0, 0)));
+			}
+		}
+		//调节c3与s4参数
+			//这一层是下采样
+		//调节s2与c3的参数
+		for(int i = 0; i < 16;i++){
+			MathFunction.adjustConvolutionMore(s2Layer, ck3[i], c3Layer[i]);
+		}
+		//调节s2与c1的参数
+			//这一层是下采样
+		//调节c1与input的参数
+		for(int i = 0;i < 6;i++){
+			MathFunction.adjustConvolution(inputLayer[0], ck1[i],c1Layer[i]);
+		}
+	}
+	
+	private void calculateDeltaError(){
+		//首先计算最后一层output层的Δerror
+		for(int i = 0;i < 10;i++){
+			double loss = desiredOutput[i] - outputLayer[i].getNumber(0, 0);
+			outputLayer[i].setError(0, 0, loss);
+		}
+		//然后计算倒数第二层f6的Δerror
+		for(int i = 0;i < 84;i++){
+			double loss = 0;
+			for(int j = 0;j < 10;j++){
+				loss += bp2[j].getWeight(i) * outputLayer[j].getError(0, 0);
+			}
+			f6Layer[i].setError(0, 0, loss);
+		}
+		//然后计算倒数第三层C5的Δerror
+		for(int i = 0;i < 120;i++){
+			double loss = 0;
+			for(int j = 0;j < 84;j++){
+				loss += bp1[j].getWeight(i) * f6Layer[j].getError(0, 0);
+			}
+			c5Layer[i].setError(0, 0, loss);
+		}
+		//然后先计算线性矩阵的Δerror，然后将现行序列展开到16个5 * 5的矩阵组当中,也就是S4的Δerror
+		double[] gapLoss = new double[16 * 5 *5];
+		for(int i = 0;i < 16 * 5 * 5;i++){
+			double loss = 0;
+			for(int j = 0;j < 120;j++){
+				loss += gap5[j].getWeight(i) * c5Layer[j].getError(0, 0);
+			}
+			gapLoss[i] = loss;
+		}
+		for(int i = 0;i < 16;i++){
+			for(int j = 0;j < 5;j++){
+				for(int k = 0;k < 5;k++){
+					s4Layer[i].setError(j, k, gapLoss[i * 16 + j * 5 + k]);
+				}
+			}
+		}
+		//然后计算C3的Δerror
+		for(int i = 0;i < 16;i++){
+			double[][] newMatrix = MathFunction.spandBackpropagationWeight(s4Layer[i].getMatrix(), 2);
+			for(int j = 0;j < 10;j++){
+				for(int k = 0;k < 10;k++){
+					c3Layer[i].setError(j, k, newMatrix[j][k]);
+				}
+			}
+		}
+		//然后计算s2的Δerror
+		for(int i = 0;i < 6;i++){
+			for(int indexKernel = 0; indexKernel < 16;indexKernel++){
+				MathFunction.inverseConvolutional(s2Layer[0], ck3[indexKernel], c3Layer[indexKernel]);
+			}
+		}
+		//然后计算C1的Δerror
+		for(int i = 0;i < 6;i++){
+			double[][] newMatrix = MathFunction.spandBackpropagationWeight(s2Layer[i].getMatrix(), 2);
+			for(int j = 0;j < 28;j++){
+				for(int k = 0;k < 28;k++){
+					c1Layer[i].setError(j, k, newMatrix[j][k]);
+				}
+			}
+		}
 	}
 	
 	private void readParaFromDisk() throws FileNotFoundException, ClassNotFoundException, IOException{
