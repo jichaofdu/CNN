@@ -6,12 +6,16 @@ public class MathFunction {
 		return (1 / (1 + Math.exp(-input)));
 	}
 	
+	public static double sigmoidDerivation(double input){
+		return sigmoid(input) * (1.0 - sigmoid(input));
+	}
+	
 	public static double ReLU(double input){
 		if(input > 0) return input;
 		else return 0;
 	}
 	
-	public static double ReLUGrandient(double input){
+	public static double ReLUDerivation(double input){
 		if(input > 0) return 1;
 		else return 0;
 	}
@@ -21,7 +25,7 @@ public class MathFunction {
 	 * @param maps
 	 * @return
 	 */
-	public static double[] mapToLine(Maps[] maps) {
+	public static double[] mapToLineNumber(Maps[] maps) {
 		int length = maps.length;
 		int size = maps[0].getHeight();
 		int returnSize = length * size * size;
@@ -30,6 +34,20 @@ public class MathFunction {
 			for(int j = 0;j < size;j++){
 				for(int k = 0;k < size;k++){
 					returnLine[i * size * size + j * size + k] = maps[i].getNumber(j, k);
+				}
+			}
+		}
+		return returnLine;
+	}
+	public static double[] mapToLineRawNumber(Maps[] maps){
+		int length = maps.length;
+		int size = maps[0].getHeight();
+		int returnSize = length * size * size;
+		double[] returnLine = new double[returnSize];
+		for(int i = 0;i < length;i++){
+			for(int j = 0;j < size;j++){
+				for(int k = 0;k < size;k++){
+					returnLine[i * size * size + j * size + k] = maps[i].getRawValue(j, k);
 				}
 			}
 		}
@@ -58,11 +76,27 @@ public class MathFunction {
 		return temp;
 	}
 	
+	public static void calculateConvolutionalReverse(Maps outputMap,Maps inputMap,int i,int j,ConvolutionalKernel ck){
+		double temp = 0;
+		int kernelSize = ck.getWidth();
+		int back = (kernelSize - 1) / 2;
+		int i2 = i + 2;
+		int j2 = j + 2;
+		for(int m = 0;m < kernelSize;m++){
+			for(int n = 0;n < kernelSize;n++){
+				int i3 = i2 - back + m;
+				int j3 = j2 - back + n;
+				temp = ck.getWeight(m, n) * outputMap.getError(i, j) * MathFunction.ReLUDerivation(inputMap.getRawValue(i3, j3));
+				inputMap.setError(i3, j3, inputMap.getError(i3, j3) + temp);
+			}
+		}
+	}
+	
 	public static double calculateSubsamplePoint(Maps originMap,int row,int column,SubsampleKernel sk){
 		double[][] matrix = originMap.getMatrix();
 		double temp = 0;
-		temp = (matrix[row][column] + matrix[row][column+1] + matrix[row+1][column] + matrix[row+1][column+1])/4;
-		//temp  = temp * sk.getBeta() + sk.getBias();
+		temp = (matrix[row][column] + matrix[row][column+1] + matrix[row+1][column] + matrix[row+1][column+1]);
+		temp  = temp * sk.getBeta() + sk.getBias();
 		return temp;
 	}
 	
@@ -82,55 +116,6 @@ public class MathFunction {
 			}
 		}
 		return newMatrix;
-	}
-	
-	public static void inverseConvolutional(Maps front,ConvolutionalKernel ck,Maps behind){
-		int width = behind.getWidth();
-		int kernelWidth = ck.getHeight();
-		for(int i = 0;i < width;i++){
-			for(int j = 0;j < width;j++){
-				for(int m = 0;m < kernelWidth;m++){
-					for(int n = 0;n < kernelWidth;n++){
-						front.setError(i + m, j + n,front.getError(i+m,j+n) + behind.getError(i, j) * ck.getWeight(m, n));
-					}
-				}	
-			}
-		}
-	}
-	
-	public static void adjustConvolution(Maps input,ConvolutionalKernel ck,Maps output){
-		int width  = output.getHeight();
-		for(int i = 0;i < width;i++){
-			for(int j = 0;j <width;j++){
-				double avgErr = output.getError(i, j) / 25;
-				for(int m = 0;m < 5;m++){
-					for(int n = 0;n < 5;n++){
-						ck.setWeight(m, n, ck.getWeight(m, n) + (-avgErr) * input.getNumber(i+m, j+m));
-					}
-				}
-				
-			}
-		}
-	}
-	
-	public static void adjustConvolutionMore(Maps[] input,ConvolutionalKernel ck,Maps output){
-		int width = output.getWidth();
-		for(int i = 0;i < width;i++){
-			for(int j = 0;j < width;j++){
-				double avgErr = output.getError(i, j) / 25;
-				for(int m = 0;m < 5;m++){
-					for(int n = 0;n < 5;n++){
-						double adjustTemp = 0;
-						for(int index = 0;index < input.length;index++){
-							adjustTemp += ck.getWeight(m, n) + (-avgErr) * input[index].getNumber(i+m, j+m);
-						}
-						adjustTemp /= 6;
-						ck.setWeight(m, n, adjustTemp);
-					}
-				}
-				
-			}
-		}
 	}
 }
 

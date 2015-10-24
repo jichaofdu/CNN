@@ -14,6 +14,7 @@ public class CNNClassification {
 	private Maps[] c3Layer;
 	private Maps[] s4Layer;
 	private double[] gapLine;
+	private double[] gapRawNumber;
 	private Maps[] c5Layer;
 	private Maps[] f6Layer;
 	private Maps[] outputLayer;
@@ -32,6 +33,7 @@ public class CNNClassification {
 	private int runSize;
 	private int ckSize;
 	private int stride;
+	private double learningRate;
 	
 	private int desiredNumber;
 	private double[] desiredOutput;
@@ -49,6 +51,7 @@ public class CNNClassification {
 		this.runSize = HyperParameter.RUNSETSIZE;
 		this.ckSize = HyperParameter.CKSIZE;
 		this.stride = HyperParameter.STRIDE;
+		this.learningRate = HyperParameter.learingRate;
 		initPara();
 		generateLayers();
 	}	
@@ -228,7 +231,7 @@ public class CNNClassification {
 	}
 	
 	private void calculateOutput(){
-		//首先计算第一层:卷积层
+		//Calculate NO.1 layer: c1 layer
 		double temp = 0;
 		for(int i = 0;i < 6;i++){
 			for(int j = 0;j < 28;j++){
@@ -236,22 +239,24 @@ public class CNNClassification {
 					int j2 = j + 2;
 					int k2 = k + 2;
 					temp = MathFunction.calculateConvolutionalPoint(inputLayer[0],j2, k2, ck1[i]);
-					c1Layer[i].setNumber(j, k, temp);
+					c1Layer[i].setRawValue(j, k, temp);
+					c1Layer[i].setNumber(j, k, MathFunction.ReLU(temp));
 				}
 			}
 		}
-		//计算第二层：子采样层
+		//Calcualte NO.2 layer: s2 layer
 		for(int i = 0;i < 6;i++){
 			for(int j = 0;j < 14;j++){
 				for(int k = 0;k < 14;k++){
 					int j2 = j * sk2[i].getStride();
 					int k2 = k * sk2[i].getStride();
 					temp = MathFunction.calculateSubsamplePoint(c1Layer[i],j2, k2, sk2[i]);
-					s2Layer[i].setNumber(j, k, temp);
+					s2Layer[i].setRawValue(j, k, temp);
+					s2Layer[i].setNumber(j, k, MathFunction.ReLU(temp));
 				}
 			}
 		}
-		//计算第三层：卷积层
+		//Calculate NO.3 layer: c3 layer
 		for(int i = 0;i < 16;i++){
 			for(int j = 0;j < 10;j++){
 				for(int k = 0;k < 10;k++){
@@ -261,49 +266,57 @@ public class CNNClassification {
 					for(int m = 0; m < 6;m++){
 						temp += MathFunction.calculateConvolutionalPoint(s2Layer[m],j2, k2, ck3[i]);
 					}
-					c3Layer[i].setNumber(j, k, temp/6);
+					c3Layer[i].setRawValue(j, k, temp / 6);
+					c3Layer[i].setNumber(j, k, MathFunction.ReLU(temp / 6));
 				}
 			}
 		}
-		//计算第四层：子采样层
+		//Calculate NO.4 layer: s4 layer
 		for(int i = 0;i < 16;i++){
 			for(int j = 0;j < 5;j++){
 				for(int k = 0;k < 5;k++){
 					int j2 = j * sk4[i].getStride();
 					int k2 = k * sk4[i].getStride();
 					temp = MathFunction.calculateSubsamplePoint(c3Layer[i],j2, k2, sk4[i]);
-					s4Layer[i].setNumber(j, k, temp);
+					s4Layer[i].setRawValue(j, k, temp);
+					s4Layer[i].setNumber(j, k, MathFunction.ReLU(temp));
 				}
 			}
 		}
-		//计算gap层：将16 * 5 * 5个数字摊开，套用bp网络算法展开
-		gapLine = MathFunction.mapToLine(s4Layer);
+		//Calcualte NO.5 layer: c5 layer  
+		gapLine = MathFunction.mapToLineNumber(s4Layer);
+		gapRawNumber = MathFunction.mapToLineRawNumber(s4Layer);
 		for(int i = 0;i < 120;i++){
 			double tempHidden = 0;
 			for(int j = 0;j < 16 * 5 * 5;j++){
 				tempHidden += gapLine[j] * gap5[i].getWeight(j);
 			}
 			tempHidden = tempHidden + gap5[i].getBias();
-			c5Layer[i].setNumber(0, 0, tempHidden);
+			c5Layer[i].setRawValue(0, 0, tempHidden);
+			c5Layer[i].setNumber(0, 0, MathFunction.ReLU(tempHidden));
 		}
-		//计算第六层：bp网络Hidden层
+		//Calculate NO.6 layer: f6 layer
 		for(int i = 0;i < 84;i++){
 			double tempHidden = 0;
 			for(int j = 0;j < 120;j++){
 				tempHidden += bp1[i].getWeight(j) * c5Layer[j].getNumber(0, 0);
 			}
 			tempHidden = tempHidden + bp1[i].getBias();
-			f6Layer[i].setNumber(0, 0, tempHidden); 
+			f6Layer[i].setRawValue(0, 0, tempHidden);
+			f6Layer[i].setNumber(0, 0, MathFunction.ReLU(tempHidden)); 
 		}
-		//计算第七层：output层
+		//Calculate NO.7 layer: output layer   
 		for(int i = 0;i < 10;i++){
 			double tempOutput = 0;
 			for(int j = 0;j < 84;j++){
 				tempOutput += bp2[i].getWeight(j) * f6Layer[j].getNumber(0, 0);
 			}
-			tempOutput = MathFunction.sigmoid(tempOutput + bp2[i].getBias());
-			outputLayer[i].setNumber(0, 0, tempOutput); 
+			tempOutput = tempOutput + bp2[i].getBias();
+			outputLayer[i].setRawValue(0, 0, tempOutput);
+			outputLayer[i].setNumber(0, 0, MathFunction.sigmoid(tempOutput)); 
+			System.out.println(MathFunction.sigmoid(tempOutput));
 		}
+		System.out.println();
 	}
 	
 	private void guessNumberAndSaveAnswer() throws IOException{
@@ -323,102 +336,165 @@ public class CNNClassification {
 	}
 	
 	private void backPropagation(){
-		calculateDeltaError();
-		//调整output与f6之间的参数
-		for(int i = 0;i < 10;i++){
-			for(int j = 0;j < 84;j++){
-				bp2[i].setWeight(j, bp2[i].getWeight(j) + (- f6Layer[j].getNumber(0, 0) * outputLayer[i].getError(0, 0) * outputLayer[i].getNumber(0,0) * (1 - outputLayer[i].getNumber(0,0))));
-			}
-		}
-		//调节c5与f6之间的参数
-		for(int i = 0;i < 84;i++){
-			for(int j = 0;j < 120;j++){
-				bp1[i].setWeight(j, bp1[i].getWeight(j) + (- c5Layer[j].getNumber(0, 0) * f6Layer[i].getError(0, 0)));
-			}
-		}
-		//调节c5与s4参数
-		for(int i = 0;i < 120;i++){
-			for(int j = 0;j < 16 * 5 * 5;j++){
-				gap5[i].setWeight(j, gap5[i].getWeight(j) + (- gapLine[j] * c5Layer[i].getNumber(0, 0)));
-			}
-		}
-		//调节c3与s4参数
-			//这一层是下采样
-		//调节s2与c3的参数
-		for(int i = 0; i < 16;i++){
-			MathFunction.adjustConvolutionMore(s2Layer, ck3[i], c3Layer[i]);
-		}
-		//调节s2与c1的参数
-			//这一层是下采样
-		//调节c1与input的参数
-		for(int i = 0;i < 6;i++){
-			MathFunction.adjustConvolution(inputLayer[0], ck1[i],c1Layer[i]);
-		}
+		calculateSensitivation();
 	}
 	
-	private void calculateDeltaError(){
+	private void calculateSensitivation(){
 		//首先计算最后一层output层的Δerror
 		for(int i = 0;i < 10;i++){
-			double loss = desiredOutput[i] - outputLayer[i].getNumber(0, 0);
+			double loss = MathFunction.sigmoidDerivation(outputLayer[i].getRawValue(0, 0)) 
+					* (desiredOutput[i] - outputLayer[i].getNumber(0, 0));
 			outputLayer[i].setError(0, 0, loss);
+			
+			//开始调整最下层weight
+			for(int j = 0;j < 84;j++){
+				bp2[i].setWeight(j, (0 - learningRate) * f6Layer[j].getNumber(0, 0) * loss + bp2[i].getWeight(j));
+			}
+			bp2[i].setBias((0 - learningRate) * loss + bp2[i].getBias());
+			
 		}
 		//然后计算倒数第二层f6的Δerror
 		for(int i = 0;i < 84;i++){
 			double loss = 0;
 			for(int j = 0;j < 10;j++){
-				loss += bp2[j].getWeight(i) * outputLayer[j].getError(0, 0);
+				loss += bp2[j].getWeight(i) * outputLayer[j].getError(0, 0)
+						* MathFunction.ReLUDerivation(f6Layer[i].getRawValue(0, 0));
 			}
 			f6Layer[i].setError(0, 0, loss);
+			
+			//开始调整下层weight
+			for(int j = 0;j < 120;j++){
+				bp1[i].setWeight(j,(0 - learningRate) * c5Layer[j].getNumber(0, 0) * loss + bp1[i].getWeight(j));
+			}
+			bp1[i].setBias((0 - learningRate) * loss + bp1[i].getBias());
+			
 		}
 		//然后计算倒数第三层C5的Δerror
 		for(int i = 0;i < 120;i++){
 			double loss = 0;
 			for(int j = 0;j < 84;j++){
-				loss += bp1[j].getWeight(i) * f6Layer[j].getError(0, 0);
+				loss += bp1[j].getWeight(i) * f6Layer[j].getError(0, 0)
+						* MathFunction.ReLUDerivation(c5Layer[i].getRawValue(0, 0));
 			}
 			c5Layer[i].setError(0, 0, loss);
+			
+			for(int j = 0;j < 400;j++){
+				gap5[i].setWeight(j, (0 - learningRate) * gapLine[j] * loss + gap5[i].getWeight(j));
+			}
+			gap5[i].setBias((0 - learningRate) * loss + gap5[i].getBias());
+			
 		}
 		//然后先计算线性矩阵的Δerror，然后将现行序列展开到16个5 * 5的矩阵组当中,也就是S4的Δerror
 		double[] gapLoss = new double[16 * 5 *5];
 		for(int i = 0;i < 16 * 5 * 5;i++){
 			double loss = 0;
 			for(int j = 0;j < 120;j++){
-				loss += gap5[j].getWeight(i) * c5Layer[j].getError(0, 0);
+				loss += gap5[j].getWeight(i) * c5Layer[j].getError(0, 0)
+						* MathFunction.ReLUDerivation(gapRawNumber[i]);
 			}
 			gapLoss[i] = loss;
 		}
 		for(int i = 0;i < 16;i++){
+			double tempBiasChange = 0;
+			double tempWeightChange = 0;
 			for(int j = 0;j < 5;j++){
 				for(int k = 0;k < 5;k++){
 					s4Layer[i].setError(j, k, gapLoss[i * 16 + j * 5 + k]);
+					tempBiasChange += s4Layer[i].getError(j, k);
+					tempWeightChange += s4Layer[i].getError(j, k) * s4Layer[i].getNumber(j, k);
 				}
 			}
+			sk4[i].setBeta((0 - learningRate) * tempWeightChange + sk4[i].getBeta());
+			sk4[i].settBias((0 - learningRate) * tempBiasChange + sk4[i].getBias());
 		}
+		
 		//然后计算C3的Δerror
 		for(int i = 0;i < 16;i++){
 			double[][] newMatrix = MathFunction.spandBackpropagationWeight(s4Layer[i].getMatrix(), 2);
 			for(int j = 0;j < 10;j++){
 				for(int k = 0;k < 10;k++){
-					c3Layer[i].setError(j, k, newMatrix[j][k]);
+					c3Layer[i].setError(j, k, sk4[i].getBeta() 
+							* newMatrix[j][k] * MathFunction.ReLUDerivation(c3Layer[i].getRawValue(j, k)));
 				}
 			}
 		}
-		//然后计算s2的Δerror
-		for(int i = 0;i < 6;i++){
-			for(int indexKernel = 0; indexKernel < 16;indexKernel++){
-				MathFunction.inverseConvolutional(s2Layer[0], ck3[indexKernel], c3Layer[indexKernel]);
+		
+		for(int indexCK = 0;indexCK < 16;indexCK++){
+			for(int i = 0;i < 5;i++){
+				for(int j = 0;j < 5;j++){
+					double tempWeightChange = 0;
+					double tempBiasChange = 0;
+					for(int m = 0;m < 10;m++){
+						for(int n = 0;n < 10;n++){
+							tempBiasChange += c3Layer[indexCK].getError(m, n);
+							for(int indexMap = 0;indexMap < 6;indexMap++){
+								tempWeightChange += s2Layer[indexMap].getNumber(m + i, n + j) * c3Layer[indexCK].getError(m, n);
+							}
+							
+						}
+					}
+					ck3[indexCK].setBias( (0 - learningRate) * tempBiasChange + ck3[indexCK].getBias());
+					ck3[indexCK].setWeight(i, j, (0 - learningRate) * tempWeightChange + ck3[indexCK].getWeight(i, j));
+				}
 			}
 		}
+		
+		
+		
+		
+		//然后计算s2的Δerror
+		for(int i = 0;i < 16;i++){
+			for(int j = 0;j < 10;j++){
+				for(int k = 0;k < 10;k++){
+					for(int m = 0; m < 6;m++){
+						MathFunction.calculateConvolutionalReverse(c3Layer[i], s2Layer[m], j, k, ck3[m]);
+					}	
+				}
+			}
+		}
+		for(int i = 0;i < 6;i++){
+			double tempBiasChange = 0;
+			double tempWeightChange = 0;
+			for(int j = 0;j < 14;j++){
+				for(int k = 0;k < 14;k++){
+					tempBiasChange += s2Layer[i].getError(j, k);
+					tempWeightChange += s2Layer[i].getError(j, k) * s2Layer[i].getNumber(j, k);
+				}
+			}
+			sk2[i].setBeta((0 - learningRate) * tempWeightChange + sk2[i].getBeta());
+			sk2[i].settBias(- learningRate * tempBiasChange + sk2[i].getBias());
+		}
 		//然后计算C1的Δerror
+		//to-do
 		for(int i = 0;i < 6;i++){
 			double[][] newMatrix = MathFunction.spandBackpropagationWeight(s2Layer[i].getMatrix(), 2);
+			double tempBiasChange = 0;
 			for(int j = 0;j < 28;j++){
 				for(int k = 0;k < 28;k++){
-					c1Layer[i].setError(j, k, newMatrix[j][k]);
+					c1Layer[i].setError(j, k, sk2[i].getBeta() 
+							* newMatrix[j][k] * MathFunction.ReLUDerivation(c1Layer[i].getRawValue(j, k)));
+					tempBiasChange += c1Layer[i].getError(j, k);
+				}
+			}
+			ck1[i].setBias((0 - learningRate) * tempBiasChange + ck1[i].getBias());
+		}
+		
+		for(int indexCK = 0;indexCK < 6;indexCK++){
+			for(int i = 0;i < 5;i++){
+				for(int j = 0;j < 5;j++){
+					double tempWeightChange = 0;
+					for(int m = 0;m < 28;m++){
+						for(int n = 0;n < 28;n++){
+							tempWeightChange += inputLayer[0].getNumber(m + i, n + j) * c1Layer[indexCK].getError(m, n);
+						}
+					}
+					ck1[indexCK].setWeight(i, j, (0 - learningRate) * tempWeightChange + ck1[indexCK].getWeight(i, j));
 				}
 			}
 		}
 	}
+	
+
 	
 	private void readParaFromDisk() throws FileNotFoundException, ClassNotFoundException, IOException{
 		for(int i = 0;i < 6;i++){

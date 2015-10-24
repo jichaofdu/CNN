@@ -4,17 +4,20 @@ public class Maps {
 	private int width;
 	private int height;
 	private double[][] matrix;
+	private double[][] rawValueMatrix;
 	private double[][] error;
 	
 	public Maps(int width){
 		this.width = width;
 		this.height = width;
-		matrix = new double[height][width];
-		error = new double[height][width];
+		this.matrix = new double[height][width];
+		this.error = new double[height][width];
+		this.rawValueMatrix = new double[height][width];
 		for(int i = 0;i < height;i++){
 			for(int j = 0;j < width;j++){
 				this.matrix[i][j] = 0;
 				this.error[i][j] = 0;
+				this.rawValueMatrix[i][j] = 0;
 			}
 		}
 	}
@@ -58,6 +61,14 @@ public class Maps {
 	
 	public void setNumber(int i,int j,double number){
 		this.matrix[i][j] = number;
+	}
+	
+	public void setRawValue(int i,int j,double value){
+		this.rawValueMatrix[i][j] = value;
+	}
+	
+	public double getRawValue(int i,int j){
+		return this.rawValueMatrix[i][j];
 	}
 	
 	public void resetChange(){
